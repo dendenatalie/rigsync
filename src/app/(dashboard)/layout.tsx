@@ -104,6 +104,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       setUserEmail(data.user?.email ?? null);
+      // Ensure org exists — handles the case where email confirmation is
+      // disabled and the auth callback was never triggered.
+      if (data.user) {
+        fetch('/api/auth/setup-org', { method: 'POST' }).catch(() => {});
+      }
     });
   }, []);
 

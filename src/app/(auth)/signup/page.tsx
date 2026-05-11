@@ -29,7 +29,7 @@ export default function SignupPage() {
     setError('');
 
     const supabase = createClient();
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -40,6 +40,14 @@ export default function SignupPage() {
     if (signUpError) {
       setError(signUpError.message);
       setLoading(false);
+      return;
+    }
+
+    // If email confirmation is disabled, a session is created immediately —
+    // ensure their org exists then redirect straight to the dashboard.
+    if (signUpData.session) {
+      await fetch('/api/auth/setup-org', { method: 'POST' });
+      router.push('/dashboard');
       return;
     }
 

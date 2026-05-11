@@ -28,8 +28,8 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isAuthRoute = path.startsWith('/login');
-  const isPublicRoute = path.startsWith('/pay') || path.startsWith('/api/stripe/webhook');
+  const isAuthRoute = path.startsWith('/login') || path.startsWith('/signup');
+  const isPublicRoute = path.startsWith('/pay') || path.startsWith('/api/stripe/webhook') || path.startsWith('/api/pay');
 
   // Redirect unauthenticated users to login
   if (!isAuthRoute && !isPublicRoute && !user) {
