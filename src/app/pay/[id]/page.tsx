@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { CheckCircle, XCircle, CreditCard, Loader2 } from 'lucide-react';
@@ -53,7 +53,7 @@ interface QuoteData {
   }[];
 }
 
-export default function PayPage() {
+function PayPageInner() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const success = searchParams.get('success') === '1';
@@ -311,5 +311,13 @@ export default function PayPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PayPage() {
+  return (
+    <Suspense>
+      <PayPageInner />
+    </Suspense>
   );
 }
