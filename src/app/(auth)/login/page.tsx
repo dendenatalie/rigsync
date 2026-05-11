@@ -112,8 +112,11 @@ export default function LoginPage() {
         </form>
       </div>
 
-      <p className="text-center text-xs text-gray-400 mt-6">
-        Need access? Contact your administrator.
+      <p className="text-center text-sm text-gray-500 mt-6">
+        Don't have an account?{' '}
+        <a href="/signup" className="text-indigo-600 hover:text-indigo-700 font-medium">
+          Create one
+        </a>
       </p>
     </div>
   );

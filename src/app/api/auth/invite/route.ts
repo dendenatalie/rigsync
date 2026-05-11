@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 
+/** Returns the admin (oldest) user id from the full user list */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getAdminId(adminClient: any): Promise<string | null> {
+  const { data } = await adminClient.auth.admin.listUsers();
+  if (!data?.users?.length) return null;
+  const sorted = [...data.users].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  return sorted[0].id;
+}
+
 export async function POST(req: NextRequest) {
   // Verify the requesting user is authenticated
   const supabase = await createClient();
@@ -26,6 +37,12 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
+
+  // Only the admin (oldest account) can invite new users
+  const adminId = await getAdminId(admin);
+  if (user.id !== adminId) {
+    return NextResponse.json({ error: 'Only the account owner can invite team members.' }, { status: 403 });
+  }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
@@ -68,6 +85,17 @@ export async function DELETE(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY
   );
+
+  // Only the admin (oldest account) can remove users
+  const adminId = await getAdminId(admin);
+  if (user.id !== adminId) {
+    return NextResponse.json({ error: 'Only the account owner can remove team members.' }, { status: 403 });
+  }
+
+  // The admin account itself can never be deleted
+  if (userId === adminId) {
+    return NextResponse.json({ error: 'The account owner cannot be removed.' }, { status: 400 });
+  }
 
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) {

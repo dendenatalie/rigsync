@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
-import { Save, Palette, Building2, CreditCard, Eye, FileText, Plus, Pencil, Trash2, Star, Users, UserPlus, Loader2, Mail } from 'lucide-react';
+import { Save, Palette, Building2, CreditCard, Eye, FileText, Plus, Pencil, Trash2, Star, Users, UserPlus, Loader2, Mail, ShieldCheck } from 'lucide-react';
 
 interface AppSettings {
   id: string;
@@ -241,6 +241,7 @@ interface TeamUser {
   created_at: string;
   last_sign_in_at: string | null;
   invited_at: string | null;
+  isAdmin: boolean;
 }
 
 function TeamMembers() {
@@ -252,6 +253,7 @@ function TeamMembers() {
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [removing, setRemoving] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState('');
+  const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
 
   async function loadUsers() {
     setLoading(true);
@@ -262,7 +264,12 @@ function TeamMembers() {
     const res = await fetch('/api/auth/users');
     if (res.ok) {
       const data = await res.json();
-      setUsers(data.users ?? []);
+      const userList: TeamUser[] = data.users ?? [];
+      setUsers(userList);
+      if (user) {
+        const me = userList.find(u => u.id === user.id);
+        setCurrentUserIsAdmin(me?.isAdmin ?? false);
+      }
     }
     setLoading(false);
   }
@@ -312,31 +319,33 @@ function TeamMembers() {
 
   return (
     <div className="space-y-5">
-      {/* Invite form */}
-      <div>
-        <p className="text-xs font-medium text-gray-700 mb-2">Invite a team member</p>
-        <form onSubmit={handleInvite} className="flex gap-2">
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={e => setInviteEmail(e.target.value)}
-            placeholder="colleague@example.com"
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            required
-          />
-          <button
-            type="submit"
-            disabled={inviting}
-            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-medium rounded-lg flex items-center gap-1.5 transition"
-          >
-            {inviting ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-            Invite
-          </button>
-        </form>
-        {inviteError && <p className="text-xs text-red-600 mt-1.5">{inviteError}</p>}
-        {inviteSuccess && <p className="text-xs text-green-600 mt-1.5">{inviteSuccess}</p>}
-        <p className="text-xs text-gray-400 mt-1.5">They'll receive an email to set their password and log in.</p>
-      </div>
+      {/* Invite form — only shown to admin */}
+      {currentUserIsAdmin && (
+        <div>
+          <p className="text-xs font-medium text-gray-700 mb-2">Invite a team member</p>
+          <form onSubmit={handleInvite} className="flex gap-2">
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={e => setInviteEmail(e.target.value)}
+              placeholder="colleague@example.com"
+              className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+            />
+            <button
+              type="submit"
+              disabled={inviting}
+              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-medium rounded-lg flex items-center gap-1.5 transition"
+            >
+              {inviting ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+              Invite
+            </button>
+          </form>
+          {inviteError && <p className="text-xs text-red-600 mt-1.5">{inviteError}</p>}
+          {inviteSuccess && <p className="text-xs text-green-600 mt-1.5">{inviteSuccess}</p>}
+          <p className="text-xs text-gray-400 mt-1.5">They'll receive an email to set their password and log in.</p>
+        </div>
+      )}
 
       {/* User list */}
       <div>
@@ -351,17 +360,22 @@ function TeamMembers() {
           <div className="space-y-2">
             {users.map(u => (
               <div key={u.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                  <span className="text-indigo-700 text-xs font-semibold uppercase">{u.email[0]}</span>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${u.isAdmin ? 'bg-indigo-600' : 'bg-indigo-100'}`}>
+                  <span className={`text-xs font-semibold uppercase ${u.isAdmin ? 'text-white' : 'text-indigo-700'}`}>{u.email[0]}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-gray-800 truncate flex items-center gap-1.5 flex-wrap">
                     {u.email}
+                    {u.isAdmin && (
+                      <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5 flex-shrink-0">
+                        <ShieldCheck size={10} /> Owner
+                      </span>
+                    )}
                     {u.id === currentUserId && (
-                      <span className="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-normal">You</span>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-normal flex-shrink-0">You</span>
                     )}
                     {u.invited_at && !u.last_sign_in_at && (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5">
+                      <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5 flex-shrink-0">
                         <Mail size={10} /> Pending
                       </span>
                     )}
@@ -372,11 +386,12 @@ function TeamMembers() {
                       : `Added: ${new Date(u.created_at).toLocaleDateString()}`}
                   </p>
                 </div>
-                {u.id !== currentUserId && (
+                {/* Remove button: only admins can remove, never remove admin or yourself */}
+                {currentUserIsAdmin && u.id !== currentUserId && !u.isAdmin && (
                   <button
                     onClick={() => handleRemove(u.id, u.email)}
                     disabled={removing === u.id}
-                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex-shrink-0"
                     title="Remove user"
                   >
                     {removing === u.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

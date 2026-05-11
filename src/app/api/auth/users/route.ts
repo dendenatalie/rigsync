@@ -11,7 +11,7 @@ export async function GET() {
   }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    // Return just the current user if no service role key
+    // Return just the current user if no service role key (they are the only/admin user)
     return NextResponse.json({
       users: [{
         id: user.id,
@@ -19,6 +19,7 @@ export async function GET() {
         created_at: user.created_at,
         last_sign_in_at: user.last_sign_in_at,
         invited_at: null,
+        isAdmin: true,
       }],
     });
   }
@@ -33,12 +34,19 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // The admin/owner is the first user ever created (oldest created_at)
+  const sorted = [...data.users].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  const adminId = sorted[0]?.id;
+
   const users = data.users.map(u => ({
     id: u.id,
     email: u.email,
     created_at: u.created_at,
     last_sign_in_at: u.last_sign_in_at,
     invited_at: u.invited_at,
+    isAdmin: u.id === adminId,
   }));
 
   return NextResponse.json({ users });
