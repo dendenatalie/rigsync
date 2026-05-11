@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Package, FileText, Users,
-  DollarSign, AlertTriangle, Menu, X, ChevronDown, Settings
+  DollarSign, AlertTriangle, Menu, X, ChevronDown, Settings, LogOut
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -95,7 +96,23 @@ function NavItem({ item, pathname }: { item: typeof navItems[0]; pathname: strin
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data.user?.email ?? null);
+    });
+  }, []);
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -140,9 +157,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
 
-        {/* Footer */}
+        {/* User + logout */}
         <div className="px-4 py-4 border-t border-gray-100">
-          <p className="text-xs text-gray-400 text-center">RigSync v1.0</p>
+          {userEmail && (
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-indigo-700 font-semibold text-xs uppercase">
+                  {userEmail[0]}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 truncate flex-1">{userEmail}</p>
+            </div>
+          )}
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <LogOut size={15} />
+            Sign out
+          </button>
         </div>
       </aside>
 

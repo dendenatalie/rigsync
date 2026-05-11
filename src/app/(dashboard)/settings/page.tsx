@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, TextArea } from '@/components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
-import { Save, Palette, Building2, CreditCard, Eye, FileText, Plus, Pencil, Trash2, Star } from 'lucide-react';
+import { Save, Palette, Building2, CreditCard, Eye, FileText, Plus, Pencil, Trash2, Star, Users, UserPlus, Loader2, Mail } from 'lucide-react';
 
 interface AppSettings {
   id: string;
@@ -235,6 +235,162 @@ function TermsLibrary({ type, label }: { type: 'payment_terms' | 'project_terms'
   );
 }
 
+interface TeamUser {
+  id: string;
+  email: string;
+  created_at: string;
+  last_sign_in_at: string | null;
+  invited_at: string | null;
+}
+
+function TeamMembers() {
+  const [users, setUsers] = useState<TeamUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState('');
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState('');
+
+  async function loadUsers() {
+    setLoading(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) setCurrentUserId(user.id);
+
+    const res = await fetch('/api/auth/users');
+    if (res.ok) {
+      const data = await res.json();
+      setUsers(data.users ?? []);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => { loadUsers(); }, []);
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    setInviteError('');
+    setInviteSuccess('');
+
+    const res = await fetch('/api/auth/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: inviteEmail }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setInviteError(data.error ?? 'Failed to send invite');
+    } else {
+      setInviteSuccess(`Invitation sent to ${inviteEmail}`);
+      setInviteEmail('');
+      loadUsers();
+    }
+    setInviting(false);
+  }
+
+  async function handleRemove(userId: string, email: string) {
+    if (!confirm(`Remove ${email} from the team? They will lose access immediately.`)) return;
+    setRemoving(userId);
+    const res = await fetch('/api/auth/invite', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error ?? 'Failed to remove user');
+    } else {
+      loadUsers();
+    }
+    setRemoving(null);
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Invite form */}
+      <div>
+        <p className="text-xs font-medium text-gray-700 mb-2">Invite a team member</p>
+        <form onSubmit={handleInvite} className="flex gap-2">
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={e => setInviteEmail(e.target.value)}
+            placeholder="colleague@example.com"
+            className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            required
+          />
+          <button
+            type="submit"
+            disabled={inviting}
+            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-medium rounded-lg flex items-center gap-1.5 transition"
+          >
+            {inviting ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+            Invite
+          </button>
+        </form>
+        {inviteError && <p className="text-xs text-red-600 mt-1.5">{inviteError}</p>}
+        {inviteSuccess && <p className="text-xs text-green-600 mt-1.5">{inviteSuccess}</p>}
+        <p className="text-xs text-gray-400 mt-1.5">They'll receive an email to set their password and log in.</p>
+      </div>
+
+      {/* User list */}
+      <div>
+        <p className="text-xs font-medium text-gray-700 mb-2">Team members</p>
+        {loading ? (
+          <div className="flex items-center gap-2 text-gray-400 text-sm py-3">
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : users.length === 0 ? (
+          <p className="text-xs text-gray-400 italic py-2">No team members found.</p>
+        ) : (
+          <div className="space-y-2">
+            {users.map(u => (
+              <div key={u.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-indigo-700 text-xs font-semibold uppercase">{u.email[0]}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate flex items-center gap-1.5">
+                    {u.email}
+                    {u.id === currentUserId && (
+                      <span className="text-xs bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-normal">You</span>
+                    )}
+                    {u.invited_at && !u.last_sign_in_at && (
+                      <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-normal flex items-center gap-0.5">
+                        <Mail size={10} /> Pending
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {u.last_sign_in_at
+                      ? `Last login: ${new Date(u.last_sign_in_at).toLocaleDateString()}`
+                      : `Added: ${new Date(u.created_at).toLocaleDateString()}`}
+                  </p>
+                </div>
+                {u.id !== currentUserId && (
+                  <button
+                    onClick={() => handleRemove(u.id, u.email)}
+                    disabled={removing === u.id}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                    title="Remove user"
+                  >
+                    {removing === u.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -433,6 +589,19 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000`}</pre>
               </div>
             </CardContent>
           </Card>
+          {/* Team Members */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users size={16} className="text-indigo-500" /> Team Members
+              </CardTitle>
+              <p className="text-xs text-gray-500 mt-1">Invite colleagues and manage who has access to RigSync.</p>
+            </CardHeader>
+            <CardContent>
+              <TeamMembers />
+            </CardContent>
+          </Card>
+
         </div>
 
         {/* Right column — live invoice preview */}
