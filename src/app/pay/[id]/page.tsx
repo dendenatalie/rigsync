@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { CheckCircle, XCircle, CreditCard, Loader2 } from 'lucide-react';
 
@@ -68,17 +67,12 @@ export default function PayPage() {
 
   useEffect(() => {
     async function load() {
-      const supabase = createClient();
-      const [{ data: q }, { data: s }] = await Promise.all([
-        supabase
-          .from('quotes')
-          .select('*, customers(first_name, last_name, company_name, email), quote_items(*)')
-          .eq('id', id)
-          .single(),
-        supabase.from('app_settings').select('*').limit(1).single(),
-      ]);
-      setQuote(q as QuoteData);
-      setSettings(s as Settings);
+      const res = await fetch(`/api/pay/${id}`);
+      if (res.ok) {
+        const { quote: q, settings: s } = await res.json();
+        setQuote(q as QuoteData);
+        setSettings(s as Settings);
+      }
       setLoading(false);
     }
     load();

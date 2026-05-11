@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(req: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -16,7 +9,6 @@ export async function POST(req: NextRequest) {
 
   const body = await req.text();
   const sig = req.headers.get('stripe-signature');
-
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
   let event: Stripe.Event;
@@ -31,14 +23,15 @@ export async function POST(req: NextRequest) {
     const quoteId = session.metadata?.quote_id;
 
     if (quoteId) {
-      const supabase = getSupabase();
+      // Service role bypasses RLS — required since webhook has no user session
+      const admin = createAdminClient();
 
-      await supabase
+      await admin
         .from('stripe_sessions')
         .update({ status: 'paid', completed_at: new Date().toISOString() })
         .eq('session_id', session.id);
 
-      const { data: quote } = await supabase
+      const { data: quote } = await admin
         .from('quotes')
         .select('*, customers(id)')
         .eq('id', quoteId)
@@ -48,8 +41,11 @@ export async function POST(req: NextRequest) {
         const customerId = (quote.customers as { id: string } | null)?.id;
         const amountPaid = (session.amount_total ?? 0) / 100;
 
-        await supabase.from('financial_transactions').insert({
+        // Include org_id explicitly since webhook has no auth session
+        // (trigger's get_user_org_id() would return NULL without a session)
+        await admin.from('financial_transactions').insert({
           quote_id: quoteId,
+          org_id: quote.org_id,
           customer_id: customerId ?? null,
           type: 'payment',
           amount: amountPaid,
@@ -59,7 +55,7 @@ export async function POST(req: NextRequest) {
           transaction_date: new Date().toISOString().split('T')[0],
         });
 
-        await supabase
+        await admin
           .from('quotes')
           .update({ status: 'paid', paid_at: new Date().toISOString() })
           .eq('id', quoteId);

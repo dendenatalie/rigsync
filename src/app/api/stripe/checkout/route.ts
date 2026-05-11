@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-
-function getSupabase() {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(req: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -16,9 +9,11 @@ export async function POST(req: NextRequest) {
 
   const { quoteId } = await req.json();
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-  const supabase = getSupabase();
 
-  const { data: quote, error } = await supabase
+  // Use service role — this endpoint is called by unauthenticated customers
+  const admin = createAdminClient();
+
+  const { data: quote, error } = await admin
     .from('quotes')
     .select('*, customers(*)')
     .eq('id', quoteId)
@@ -28,9 +23,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
   }
 
-  const { data: settings } = await supabase.from('app_settings').select('company_name').limit(1).single();
-  const companyName = settings?.company_name ?? 'RigSync';
+  // Fetch settings scoped to the org that owns this quote
+  const { data: settings } = await admin
+    .from('app_settings')
+    .select('company_name')
+    .eq('org_id', quote.org_id)
+    .maybeSingle();
 
+  const companyName = settings?.company_name ?? 'RigSync';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
   const cust = quote.customers as { email?: string } | null;
 
@@ -42,7 +42,9 @@ export async function POST(req: NextRequest) {
           currency: 'usd',
           product_data: {
             name: `Invoice ${quote.quote_number}`,
-            description: quote.event_name ? `${companyName} — ${quote.event_name}` : `${companyName} — A/V Rental Services`,
+            description: quote.event_name
+              ? `${companyName} — ${quote.event_name}`
+              : `${companyName} — A/V Rental Services`,
           },
           unit_amount: Math.round(quote.total * 100),
         },
@@ -56,8 +58,9 @@ export async function POST(req: NextRequest) {
     metadata: { quote_id: quoteId, quote_number: quote.quote_number },
   });
 
-  await supabase.from('stripe_sessions').insert({
+  await admin.from('stripe_sessions').insert({
     quote_id: quoteId,
+    org_id: quote.org_id,
     session_id: session.id,
     payment_url: session.url!,
     amount: quote.total,
